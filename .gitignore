@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+env/
+
+.*
+!.gitignore
+!.pylintrc
+*.py[cdo]
+*.log
+tags
