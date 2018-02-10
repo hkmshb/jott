@@ -2,11 +2,27 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+.tmp/
+.tox/
 env/
 
-.*
-!.gitignore
-!.pylintrc
 *.py[cdo]
+*.sqlite
+*.egg
 *.log
 tags
+
+.vscode
+.cache
+.idea
+
+# test & coverage
+nosetests.xml
+coverage.xml
+.coverage
+
+.DS_Store
+.vscode
+.cache
+.idea
+.env
