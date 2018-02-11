@@ -21,5 +21,6 @@ if [ $? != 0 ] || [ ! $PYTHONPATH ]; then
 fi
 
 echo "Running Jott ..."
+echo ""
 export PYTHONPATH
 $FXPYTHON -S $@
