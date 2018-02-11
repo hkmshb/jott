@@ -1,3 +1,4 @@
+import os
 import  wx
 from . import panes, images
 
@@ -10,16 +11,21 @@ class JottFrame(wx.Frame):
 
 
     def __init__(self, parent, title='Jott', size=wx.DefaultSize):
+        # vars
+        self._workspace_dir = None
+        self._current_dir = None
+
         super().__init__(parent, title=title, size=size)
         self._root_sizer = wx.BoxSizer(wx.VERTICAL)
         self._layout_widgets()
+
 
     def _layout_widgets(self):
         self.Freeze()
 
         splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.SP_NOBORDER)
-        folder = panes.FolderPane(splitter)
-        content = panes.ContentView(splitter)
+        self._pane_folder = folder = panes.FolderPane(splitter, self)
+        self._pane_content = content = panes.ContentView(splitter, self)
 
         splitter.SetMinimumPaneSize(300)
         splitter.SplitVertically(folder, content, 300)
@@ -37,7 +43,7 @@ class JottFrame(wx.Frame):
         self.toolbar.SetToolBitmapSize((16,15))
 
         btn_styles = wx.BU_NOTEXT | wx.BU_EXACTFIT
-        btn_size = (36, 17)
+        btn_size = (20, 17) # (36, 17)
 
         def add_btn(_id, tooltip_text, img):
             button = wx.Button(tb, size=btn_size, style=btn_styles)
@@ -61,7 +67,7 @@ class JottFrame(wx.Frame):
         tb.AddSeparator()
         add_btn(101, "Hide Pane", images.app_sidebar.GetBitmap())
         add_tgl(102, "Browse attachments", images.paper_clip.GetBitmap())
-        add_btn(103, "Delete", images.broom_pencil.GetBitmap())
+        add_btn(103, "Delete", images.bin_full.GetBitmap())
         add_btn(104, "Create a note", images.report_pencil.GetBitmap())
         tb.AddSeparator()
         add_btn(105, "Add or remove password lock", images.lock_warning.GetBitmap())
@@ -73,3 +79,26 @@ class JottFrame(wx.Frame):
         add_btn(110, "Share", images.upload_cloud.GetBitmap())
         add_search(111, "Search", None)
         tb.Realize()
+
+    def set_workspace(self, dirpath):
+        if not os.path.isdir(dirpath):
+            print('Directory not found: %s' % dirpath)
+            return
+
+        self._workspace_dir = dirpath
+        self._pane_folder.set_directory(dirpath)
+
+    def on_dir_changed(self, event):
+        fullpath = os.path.join(self._workspace_dir, event.GetLabel())
+        if not os.path.isdir(fullpath):
+            return 
+
+        self._current_dir = fullpath
+        self._pane_content.set_directory(fullpath)
+
+    def on_file_changed(self, event):
+        fullpath = os.path.join(self._current_dir, event.GetLabel())
+        if not os.path.isfile(fullpath):
+            return
+
+        self._pane_content.show_content(fullpath)
