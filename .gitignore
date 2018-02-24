@@ -17,6 +17,7 @@ tags
 .idea
 
 # test & coverage
+.pytest_cache
 nosetests.xml
 coverage.xml
 .coverage

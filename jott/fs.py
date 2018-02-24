@@ -60,6 +60,7 @@ def isfile(path):
     """
     return os.path.isfile(path)
 
+
 def join(path, *paths):
     """Wrapper for os.path.joinpath which joins two or more pathname components,
     inserting '/' as needed. If any component is an absolute path, all previous
