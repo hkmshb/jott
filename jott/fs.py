@@ -134,6 +134,14 @@ class Directory(FSObject):
         super(Directory, self).__init__(fullpath)
         self._listing_flag = listing_flag
 
+    def _get_listing_flag(self):
+        return self._listing_flag
+
+    def _set_listing_flag(self, value):
+        self._listing_flag = value
+
+    DirListing = property(_get_listing_flag, _set_listing_flag)
+
     @property
     def children(self):
         root, dirs, files = next(os.walk(self.fullpath))
