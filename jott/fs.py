@@ -4,6 +4,7 @@ This module is to be used by all other Jott modules for filesystem
 interactions.
 """
 import os
+import enum
 
 
 
@@ -116,27 +117,32 @@ class FSObject:
         return self.basename
 
 
+class DirListingFlag(enum.IntFlag):
+    FILE = 1
+    DIRECTORY = 2
+    ALL = FILE | DIRECTORY
+
+
 class Directory(FSObject):
     """Represents a directory filesystem object.
     """
 
-    def __init__(self, fullpath, include_dirs=False, dirs_first=True):
+    def __init__(self, fullpath, listing_flag=DirListingFlag.ALL):
         if exists(fullpath) and not isdir(fullpath):
             fullpath = dirname(fullpath)
 
         super(Directory, self).__init__(fullpath)
-        self._include_dirs = include_dirs
-        self._dirs_first = dirs_first
+        self._listing_flag = listing_flag
 
     @property
     def children(self):
         root, dirs, files = next(os.walk(self.fullpath))
-        assets = [(File, files)]
-        if self._include_dirs:
-            assets.append((Directory, dirs))
 
-        if self._dirs_first:
-            assets.reverse()
+        assets = []
+        if DirListingFlag.DIRECTORY in self._listing_flag:
+            assets.append((Directory, dirs))
+        if DirListingFlag.FILE in self._listing_flag:
+            assets.append((File, files))
 
         for factory, items in assets:
             for item in items:

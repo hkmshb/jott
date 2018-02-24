@@ -94,8 +94,9 @@ class Jottbook:
 
     @property
     def jottbook_path(self):
-        return self.jbook_file or self.tree
+        return self.tree or fs.dirname(self.jbook_file)
 
     def get_directories(self):
-        jottbook_dir = fs.fsobject(self.jottbook_path)
+        listing_flag = fs.DirListingFlag.DIRECTORY
+        jottbook_dir = fs.Directory(self.jottbook_path, listing_flag)
         return jottbook_dir.children

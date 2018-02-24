@@ -19,50 +19,35 @@ class TestFSObject(object):
            and dirobj.fullpath == jbpath \
            and dirobj.basename == 'jottbook'
 
-    def test_dirobj_children_lists_files_only_by_default(self, jbpath):
+    def test_dirobj_children_lists_all_contents_by_default(self, jbpath):
         dirobj = fs.Directory(jbpath)
         assert dirobj is not None
 
         root, dirs, files = next(os.walk(jbpath))
         children = list(dirobj.children)
         assert children is not None \
-           and len(children) == len(files)
+           and len(children) == len(files) + len(dirs)
 
-        for f in children:
-            assert isinstance(f, fs.File)
-            assert f.basename in files
+        for c in children:
+            if c.basename in files:
+                assert isinstance(c, fs.File)
+            elif c.basename in dirs:
+                assert isinstance(c, fs.Directory)
 
-    def test_dirobj_children_can_contain_dirs_also(self, jbpath):
+    @pytest.mark.parametrize('flag', [
+        fs.DirListingFlag.FILE, fs.DirListingFlag.DIRECTORY
+    ])
+    def test_dirobj_children_can_differ_by_listing_flat(self, jbpath, flag):
         root, dirs, files = next(os.walk(jbpath))
-        dirobj = fs.Directory(jbpath, True)
-        assert len(list(dirobj.children)) == len(dirs + files)
+        dirobj = fs.Directory(jbpath, flag)
 
-    def test_dirobj_children_with_dirs_lists_dirs_first(self, jbpath):
-        root, dirs, files = next(os.walk(jbpath))
-        dirobj = fs.Directory(jbpath, True)
-        children = list(dirobj.children)
-        assert len(children) == len(dirs + files)
+        target = (fs.File, files)
+        if flag == fs.DirListingFlag.DIRECTORY:
+            target = (fs.Directory, dirs)
 
-        for fsobj in children[:len(dirs)]:
-            assert fs.isdir(fsobj.fullpath) == True
-            assert fsobj.basename in dirs
-
-        for fsobj in children[len(dirs):]:
-            assert fs.isfile(fsobj.fullpath)
-
-    def test_dirobj_children_with_dirs_can_list_files_first(self, jbpath):
-        root, dirs, files = next(os.walk(jbpath))
-        dirobj = fs.Directory(jbpath, True, False)
-        children = list(dirobj.children)
-        assert len(children) == len(dirs + files)
-
-        for fsobj in children[:len(files)]:
-            assert fs.isfile(fsobj.fullpath)
-            assert fsobj.basename in files
-
-        for fsobj in children[len(files):]:
-            assert fs.isdir(fsobj.fullpath)
-            assert fsobj.basename in dirs
+        assert len(list(dirobj.children)) == len(target[1])
+        for c in dirobj.children:
+            assert isinstance(c, target[0])
 
     def test_dirobj_repr(self, jbpath):
         dirobj = fs.Directory(jbpath)
