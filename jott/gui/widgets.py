@@ -1,5 +1,6 @@
 import os
 import wx
+import time
 from . import common, images
 from . import commands as cmds
 
@@ -99,7 +100,7 @@ class SimpleVListBox(wx.VListBox):
 
         if self._padding_right > 0:
             value = self._padding_right
-            rect.width -= vaule
+            rect.width -= value
 
         flags = wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL
         text = str(self._inner_list[item_idx])
@@ -112,6 +113,62 @@ class SimpleVListBox(wx.VListBox):
         text = str(self._inner_list[item_idx])
         width, height = self.GetTextExtent(text)
         return height + self._padding_vert
+
+
+class FileVListBox(SimpleVListBox):
+    HIGHLITE_BGCOLOUR = common.HLCOLOUR_FSP_ITEMS
+
+    def __init__(self, *args, **kw):
+        super(FileVListBox, self).__init__(*args, **kw)
+        self._padding_right = 10
+        self._padding_left = 10
+        self._padding_vert = 20
+
+    def OnDrawItem(self, dc, rect, item_idx):
+        if not self._IsValidItemIndex(item_idx):
+            return
+
+        colour = self._highlite_bgcolour
+        if self.GetSelection() != item_idx:
+            colour = self.GetForegroundColour()
+
+        font = self.GetFont()
+        dc.SetFont(font.Bold())
+        dc.SetTextForeground(colour)
+
+        if self._padding_left > 0:
+            value = self._padding_left
+            rect.x += value
+            rect.width -= value
+
+        if self._padding_right > 0:
+            value = self._padding_right
+            rect.width -= value
+
+        flags = wx.ALIGN_LEFT
+        rect_height = rect.height
+        file_item = self._inner_list[item_idx]
+
+        # file name text
+        text = str(file_item).upper()
+        rect.height = rect_height / 2
+        dc.DrawLabel(text, rect, flags | wx.ALIGN_BOTTOM)
+
+        # last modified test
+        dc.SetFont(font.Smaller().Italic())
+        dc.SetTextForeground(colour.ChangeLightness(160))
+
+        rect.Y += rect.height
+        timestamp = time.asctime(time.gmtime(file_item.last_modified))
+        dc.DrawLabel(timestamp, rect, flags | wx.ALIGN_TOP)
+
+    def OnMeasureItem(self, item_idx):
+        if not self._IsValidItemIndex(item_idx):
+            return 0
+
+        text = str(self._inner_list[item_idx])
+        width, height = self.GetTextExtent(text)
+        return (height * 2) + self._padding_vert
 
 
 class FSObjectPanel(wx.Panel):
@@ -225,8 +282,7 @@ class FilePanel(FSObjectPanel):
 
     def _get_listbox_widget(self):
         if self._vlistbox is None:
-            listbox = SimpleVListBox(self, style=wx.BORDER_NONE)
-            listbox = SimpleVListBox(self, style=wx.BORDER_NONE)
+            listbox = FileVListBox(self, style=wx.BORDER_NONE)
             listbox.SetForegroundColour(self.FGCOLOUR_ITEMS)
             listbox.SetBackgroundColour(self.BGCOLOUR)
             listbox.SetItemCount(100)

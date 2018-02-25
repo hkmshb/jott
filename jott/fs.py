@@ -166,6 +166,10 @@ class File(FSObject):
             raise ValueError('Full path to a file expected')
         super(File, self).__init__(fullpath)
 
+    @property
+    def last_modified(self):
+        return os.path.getmtime(self.fullpath)
+
     def __str__(self):
         if '.' in self.basename:
             return self.basename.split('.')[0]
