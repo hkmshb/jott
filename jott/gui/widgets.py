@@ -301,3 +301,82 @@ class FilePanel(FSObjectPanel):
         listbox = self._get_listbox_widget()
         root_sizer.Add(listbox, 1, wx.EXPAND | wx.TOP, 0)
         self.Thaw()
+
+
+class ContentBase:
+    """The base class for content objects which provide a UI component
+    used within a view.
+    """
+    def bind_to(self, parent):
+        raise NotImplementedError()
+
+    def get_content_widget(self):
+        raise NotImplementedError()
+
+
+class DirectoryContent(ContentBase):
+
+    def __init__(self):
+        self._current_panel = None
+        self._panels = []
+
+    @property
+    def current_panel(self):
+        return self._current_panel
+
+    def bind_to(self, parent):
+        assert parent and isinstance(parent, wx.Window), (
+            "Parent expected and must be a Window object"
+        )
+        widget = self._create_layout(parent)
+
+        # set bindings
+        widget.Bind(wx.EVT_CHILD_FOCUS, self._on_panel_child_focus)
+        return widget
+
+    def _create_layout(self, parent):
+        self._root_content = rcontent = wx.Panel(parent)
+        self._base_content = bcontent = wx.Panel(rcontent)
+        self._root_sizer = rsizer = wx.BoxSizer(wx.VERTICAL)
+        self._base_sizer = bsizer = wx.BoxSizer(wx.VERTICAL)
+
+        ## layout root controls
+        rcontent.SetBackgroundColour(common.BGCOLOUR_DARK)
+        rsizer.Add(bcontent, 1, wx.EXPAND)
+
+        # create content control buttons
+        btn_style = wx.BU_LEFT | wx.BORDER_NONE
+        self._btn_new = btn_new =    wx.Button(rcontent, label='  New Folder', style=btn_style)
+        btn_new.SetBitmap(images.folder_plus.GetBitmap())
+        rsizer.Add(btn_new, 0, wx.ALL, 10)
+
+        ## sizers
+        bcontent.SetSizer(bsizer)
+        rcontent.SetSizer(rsizer)
+        return rcontent
+
+    def get_content_widget(self):
+        return self._root_content
+
+    def add_directory_panel(self, title, items):
+        self._base_content.Freeze()
+        panel = DirectoryPanel(self._base_content, title)
+        panel.SetItems(items)
+
+        self._base_sizer.Add(panel, 1, wx.EXPAND | wx.BOTTOM, 5)
+        self._base_content.Thaw()
+
+        self._panels.append(panel)
+        return panel
+
+    def clear_panels(self):
+        self.Freeze()
+        for panel in self._panels:
+            self._base_content.RemoveChild(panel)
+            panel.Destroy()
+
+        self._panels.clear()
+        self.Thaw()
+
+    def _on_panel_child_focus(self, event):
+        log.debug('Panel Child Control Received Focus: %s' % event)
