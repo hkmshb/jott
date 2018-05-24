@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "jott"
+version = "0.1.0"
+description = "A simple desktop note taking editor"
+authors = ["Abdul-Hakeem Shaibu <hkmshb@gmail.com>"]
+
+readme = "README.md"
+license = "BSD-2-Clause"
+keywords = ["editor", "notes"]
+repository = "https://github.com/hkmshb/jott.git"
+
+
+[tool.poetry.dependencies]
+python = "^3.6"
+wxpython = "^4.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^3.5"
+pylint = "^1.9"
