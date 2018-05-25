@@ -7,7 +7,7 @@ APPDATA.
 import os
 import logging
 import collections
-from jott.fs import ENCODING, isdir
+from jott.fs import FS_ENCODING, isdir
 
 log = logging.getLogger('jott')
 
@@ -66,3 +66,26 @@ class Environ(collections.MutableMapping):
 
 
 environ = Environ() # Singleton
+
+
+if os.name == 'nt':
+    # Windows specific environment variables
+    if not 'USER' in environ or not environ['USER']:
+        environ['USER'] = environ['USERNAME']
+    if not 'HOME' in environ or not environ['HOME']:
+        if 'USERPROFILE' in environ:
+            environ['HOME'] = environ['USERPROFILE']
+        elif 'HOMEDRIVE' in environ and 'HOMEPATH' in environ:
+            environ['HOME'] = \
+                environ['HOMEDRIVE'] + environ['HOMEPATH']
+    if not 'APPDATA' in environ or not environ['APPDATA']:
+        environ['APPDATA'] = environ['HOME'] + '\\Application Data'
+
+if not isdir(environ['HOME']):
+    logmsg = 'Env variable $HOME does not point to an existing directory: {}'
+    log.error(logmsg.format(environ['HOME']))
+
+if not 'USER' in environ or not environ['USER']:
+    environ['USER'] = os.path.basename(environ['HOME'])
+    logmsg = 'Env variable $USER had no value and got set to "{}"'
+    log.info(logmsg.format(environ['USER']))
