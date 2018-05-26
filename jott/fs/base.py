@@ -4,6 +4,7 @@ import logging
 from urllib.parse import urlencode
 
 from . import FS_ENCODING, FS_SUPPORT_NON_LOCAL_FILE_SHARES
+from jott.exc import Error
 
 log = logging.getLogger('jott.fs')
 
@@ -16,6 +17,22 @@ is_share_re = re.compile(r'^\\\\\w')
 _SEP = os.path.sep
 _EOL = 'dos' if os.name == 'nt' else 'unix'
 
+
+class FileNotFoundError(Error):
+    """Error thrown when a file is not found.
+    """
+
+    def __init__(self, path):
+        self.file = path
+        path = path.path if hasattr(path, 'path') else path
+        super().__init__('No such file or folder: {}'.format(path))
+
+
+class FolderNotEmptyError(Error):
+
+    def __init__(self, path):
+        path = path.path if hasattr(path, 'path') else path
+        super().__init__('Folder not empty: {}'.format(path))
 
 
 def _split_file_url(url):
