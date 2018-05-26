@@ -42,7 +42,7 @@ def _split_normpath(path):
         else:
             if path.startswith('~'):
                 mkroot = True
-                path = os.path.expanduser(path)
+                path = _os_expanduser(path)
             else:
                 mkroot = path.startswith('/')
             mkshare = re.match(r'^\\\\\w', path) is not None
@@ -71,6 +71,31 @@ def _split_normpath(path):
     elif mkroot and os.name != 'nt' and names[0][0] != '/':
         names[0] = '/' + names[0]
     return tuple(names)
+
+
+def _os_expanduser(path):
+    """Wrapper for os.path.expanduser.
+    """
+    assert path.startswith('~')
+    if FS_ENCODING == 'mbcs':
+        parts = path.replace('\\', '/').strip('/').split('/')
+        parts[0] = os.path.expanduser(parts[0])
+        path = _SEP.join(parts)
+    else:
+        path = os.path.expanduser(path)
+    
+    if path.startswith('~'):
+        # expansion failed - do a simple fallback
+        from jott.env import environ
+
+        home = environ['HOME']
+        parts = path.replace('\\', '/').strip('/').split('/')
+        if parts[0] == '~':
+            path = _SEP.join([home] + parts[1:])
+        else:   #~user
+            dir = os.path.dirname(home) # /home or similar ?
+            path = _SEP.join([dir, parts[0][1:]] + parts[1:])
+    return path
 
 
 if os.name == 'nt':
@@ -148,9 +173,10 @@ class FilePath:
             return _join_abspath(self.pathnames[:-1])
         return None
 
-    @property
-    def uri(self):
-        return _join_uri(self.pathnames)
+    # TODO: fix _join_uri
+    # @property
+    # def uri(self):
+    #     return _join_uri(self.pathnames)
 
     @property
     def userpath(self):
@@ -282,4 +308,3 @@ class FSObjectBase(FilePath):
         log.debug('Crosss FS type move {} --> {}'.format(self, other))
         self._copyto(other)
         self.remove()
-

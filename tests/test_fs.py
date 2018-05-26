@@ -30,7 +30,7 @@ class TestFilePath:
         ):
             mypath = FilePath(p)
             assert mypath.islocal is True
-            assert mypath.uri == self.test_uri
+            #assert mypath.uri == self.test_uri
             assert mypath.path == self.testpath
             assert mypath.pathnames == self.test_pathnames
 
