@@ -1,6 +1,8 @@
 import os
 import re
 import logging
+import hashlib
+import contextlib
 from urllib.parse import urlencode
 
 from . import FS_ENCODING, FS_SUPPORT_NON_LOCAL_FILE_SHARES
@@ -430,4 +432,152 @@ class Folder(FSObjectBase):
                 child.copyto(other.file(child.basename))
             else:
                 child.copyto(other.folder(child.basename))
+        other._set_mtime(self.mtime())
+
+
+xdgmime = None
+mimetypes = None
+try:
+    import xdg.Mime as xdgmime
+except ImportError:
+    if os.name != 'nt':
+        log.warn("Cannot import 'xdg.Mime' - falling back to 'mimetype'")
+    else:
+        pass    # ignore this error on Windows; doesn't come with xdg.Mime
+    import mimetypes
+
+
+def _md5(content):
+    # provide encoded content to avoid double work
+    if isinstance(content, str):
+        content = (content,)
+
+    hasher = hashlib.md5()
+    for c in content:
+        hasher.update(c)
+    return hasher.digest()
+
+
+class File(FSObjectBase):
+    """Base class for file implementations. 
+    
+    Cannot be instantiated directly; use one of the subclasses instead. Main
+    use outside of this module is to check isinstance(object, File).
+    """
+
+    def __init__(zself, path, endofline=_EOL):
+        errmsg = 'This class is not meant to be instantiated'
+        raise NotImplementedError(errmsg)
+
+    def __iter__(self):
+        return iter(self.readlines())
+
+    def mimetype(self):
+        """Get the mime-type for this file.
+
+        Will use the XDG mimetype system if available, otherwise falls back to
+        the standard library mimetypes.
+
+        :returns: the mimetype as a string e.g. "text/plain"
+        """
+        if self._mimetype is None:
+            if xdgmime:
+                mimetype = xdgmime.get_type(self.path, name_pri=80)
+                self._mimetype = str(mimetype)
+            else:
+                mimetype, encoding = mimetypes.guess_type(self.path, strict=False)
+                if encoding == 'gzip':
+                    return 'application/x-gzip'
+                elif encoding == 'bzip2':
+                    return 'application/x-bzip2'
+                elif encoding == 'compress':
+                    return 'application/x-compress'
+                else:
+                    self._mimetype = mimetype or 'application/octet-stream'
+        return self._mimetype
+
+    def size(self):
+        raise NotImplementedError()
+
+    def read(self):
+        raise NotImplementedError()
+
+    def readlines(self):
+        raise NotImplementedError()
+
+    def read_binary(self):
+        raise NotImplementedError()
+
+    def touch(self):
+        if not self.exists():
+            self.write('')
+
+    def write(self, text):
+        raise NotImplementedError()
+
+    def writelines(self, lines):
+        raise NotImplementedError()
+
+    def write_binary(self, data):
+        raise NotImplementedError()
+
+    @contextlib.contextmanager
+    def _write_decoration(self):
+        existed = self.exists()
+        if not existed:
+            self.parent().touch()
+        elif not self.iswritable():
+            raise FileNotWritableError(self)
+        yield
+
+        if self.watcher:
+            if existed:
+                self.watcher.emit('changed', self)
+            else:
+                self.watcher.emit('created', self)
+
+    def read_with_etag(self):
+        return self._read_with_egat(self.read)
+
+    def readlines_with_etag(self):
+        return self._read_with_etag(self.readlines)
+
+    def _read_with_etag(self, func):
+        mtime = self.mtime()
+        content = func()
+        etag = (mtime, _md5(content))
+        return content, etag
+
+    def write_with_etag(self, text, etag):
+        return self._write_with_etag(self.write, text, etag)
+
+    def writelines_with_etag(self, lines, etag):
+        return self._write_with_etag(self.writelines, lines, etag)
+
+    def _write_with_etag(self, func, content, etag):
+        # TODO: to make rock-solid would need to lock file b4 etag check
+        if not self.exists():
+            # goal is to prevent overwriting new content
+            pass
+        else:
+            if not self.verify_etag(etag):
+                raise FileChangedError(self)
+        func(content)
+        return (self.mtime(), _md5(content))
+
+    def verify_etag(self, etag):
+        if isinstance(etag, tuple) and len(etag) == 2:
+            mtime = self.mtime()
+            if etag[0] != mtime:
+                # mtime fails... lets see check md5
+                md5 = _md5(self.read())
+                return etag[1] == md5
+            else:
+                return True
+        raise AssertionError('Invalid etag: {!r}'.format(etag))
+
+    def _copyto(self, other):
+        if other.exists():
+            raise FileExistsError(other)
+        other.write_binarys(self.read_binary())
         other._set_mtime(self.mtime())
