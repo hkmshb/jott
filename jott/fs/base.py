@@ -50,7 +50,7 @@ def _split_file_url(url):
 
 
 def _split_normpath(path):
-    # takes either string or list of anems and returns a normalized tuple
+    # takes either string or list of names and returns a normalized tuple
     # keeps leading "/" or "\\" to distinguish absolute paths
     if isinstance(path, str):
         if is_url_re.match(path):
@@ -325,3 +325,109 @@ class FSObjectBase(FilePath):
         log.debug('Crosss FS type move {} --> {}'.format(self, other))
         self._copyto(other)
         self.remove()
+
+
+class Folder(FSObjectBase):
+    """Base class for Folder implementations.
+
+    Cannot be instantiated directly; use one of the subclasses instead. Main
+    use outside of this module is to check 'isinstance(object, Folder)'
+    """
+
+    def __init__(self, path):
+        errmsg = 'This class is not to be instantiated directly'
+        raise NotImplementedError(errmsg)
+
+    def __iter__(self):
+        raise NotImplementedError()
+
+    def list_files(self):
+        raise NotImplementedError()
+
+    def list_folders(self):
+        raise NotImplementedError()
+
+    def walk(self):
+        for child in self:
+            yield child
+            if isinstance(child, Folder):
+                for grandchild in child.walk():
+                    yield grandchild
+
+    def child(self, path):
+        raise NotImplementedError()
+
+    def file(self, path):
+        raise NotImplementedError()
+
+    def folder(self, path):
+        raise NotImplementedError()
+
+    def new_file(self, path):
+        """Get a File object for a new file below this folder. Like file()
+        but guarantees the file doesn't yet exist by adding sequential
+        numbers if needed. So the resulting file may have a modified name.
+
+        :param path: the relative file path.
+        :returns: a File object.
+        """
+        return self._new_child(path, self.file)
+
+    def new_folder(self, path):
+        """Get a Folder object for a new folder below this folder. Like
+        folder() but guarantees the folder doesn't yet exist by adding
+        sequential numbers if needed. So the resulting folder may have a
+        modified name.
+
+        :param path: the relative folder path
+        :returns: a Folder object
+        """
+        return self._new_child(path, self.folder)
+
+    def _new_child(self, path, factory):
+        p = self.get_childpath(path.replace('%', '%%'))
+        if '.' in p.basename:
+            basename, ext = p.basename.split('.', 1)
+            pattern = p.relpath(self)[:len(basename)] + '%03i.' + ext
+        else:
+            pattern = p.relpath(self) + '%03i'
+
+        i = 0
+        trypath = path
+        while i < 1000:
+            try:
+                # this way we catch both existing files and folders
+                file = self.child(trypath)
+            except FileNotFoundError:
+                return factory(trypath)
+            else:
+                log.debug('File exists "{}" trying increment'.format(file.path))
+                i += 1
+                trypath = pattern % i
+        else:
+            raise Exception('Could not find new file for: {}'.format(path))
+
+    def remove_children(self):
+        """Recursively remove everything below this folder.
+
+        WARNING: this is quite powerful and can do a lot of damage when
+        executed for the wrong folder, so please make sure to double
+        check the dir is actually what you think it is before call this
+        """
+        for child in self:
+            assert child.path.startswith(self.path) # just to be real sure
+            if isinstance(child, Folder):
+                child.remove_children()
+            else:
+                child.remove()
+
+    def _copyto(self, other):
+        if other.exists():
+            raise FileExistsError(other)
+        other.touch()
+        for child in self:
+            if isinstance(child, File):
+                child.copyto(other.file(child.basename))
+            else:
+                child.copyto(other.folder(child.basename))
+        other._set_mtime(self.mtime())
