@@ -36,7 +36,7 @@ def _os_lrmdir(path):
 class LocalFSObjectBase(FSObjectBase):
 
     def __init__(self, path, watcher=None):
-        super(LocalFSObjectBase, self).__init__(self, path, watcher=watcher)
+        FSObjectBase.__init__(self, path, watcher=watcher)
 
     def _stat(self):
         try:
@@ -81,7 +81,7 @@ class LocalFSObjectBase(FSObjectBase):
 
             assert isinstance(other, File)
         else:
-            assert isisntance(other, Folder)
+            assert isinstance(other, Folder)
 
         if not isinstance(other, LocalFSObjectBase):
             errmsg = 'TODO: support cross object type move'
@@ -231,7 +231,7 @@ class AtomicWriteContext:
         self.fh.close()
 
         if not any(exc_info) and os.path.isfile(self.tmppath):
-            os.replace_file(self.tmppath, self.path)
+            os.replace(self.tmppath, self.path)
         else:
             # errors happened, try clean up
             try:
@@ -240,11 +240,11 @@ class AtomicWriteContext:
                 pass
 
 
-class LocalFile(FSObjectBase, File):
+class LocalFile(LocalFSObjectBase, File):
 
     def __init__(self, path, endofline=_EOL, watcher=None):
         super(LocalFile, self).__init__(path, watcher=watcher)
-        self.endofline = endofine
+        self.endofline = endofline
         self._mimetype = None
 
     def exists(self):
@@ -295,7 +295,7 @@ class LocalFile(FSObjectBase, File):
 
         with self._write_decoration():
             with AtomicWriteContext(self, mode=mode) as fh:
-                fh.writelines(lines)
+                fh.writelines(text)
 
     def write_binary(self, data):
         with self._write_decoration():
@@ -344,7 +344,7 @@ class TempFile(LocalFile):
     """
 
     def __init__(self, basename, unique=True, persistent=False):
-        dir = get_tempdir()
+        dir = get_tmpdir()
         if unique:
             super(TempFile, self).__init__(dir.new_file(basename))
         else:
@@ -363,7 +363,7 @@ def get_tmpdir():
     """
     root = tempfile.gettempdir()
     username = environ['USER']
-    dir = LocalFolder(root).folder('jott-{}'.name(username))
+    dir = LocalFolder(root).folder('jott-{}'.format(username))
     try:
         dir.touch(mode=0o700)   # limit to single user
         os.listdir(dir.path)    # raises error if no access
