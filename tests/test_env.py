@@ -2,7 +2,7 @@ import os
 import tests
 import pytest
 
-from jott.fs import Dir
+from jott.fs import LocalFolder
 from jott.env import environ
 
 
@@ -62,7 +62,7 @@ class TestEnviron:
     def test_get_list_path(self):
         path = environ.get_list('PATH')
         assert len(path) > 0
-        for dir in map(Dir, path):
+        for dir in map(LocalFolder, path):
             if dir.exists():
                 break
         else:
@@ -75,9 +75,9 @@ class TestEnviron:
 
         home = environ.get('HOME')
         assert home is not None
-        assert Dir(home).exists() == True
+        assert LocalFolder(home).exists() == True
 
         if os.name == 'nt':
             appdata = environ.get('APPDATA')
             assert appdata is not None
-            assert Dir(appdata).exists() == True
+            assert LocalFolder(appdata).exists() == True
