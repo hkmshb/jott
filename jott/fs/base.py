@@ -30,6 +30,33 @@ class FileNotFoundError(Error):
         super().__init__('No such file or folder: {}'.format(path))
 
 
+class FileChangedError(Error):
+
+    def __init__(self, path):
+        self.file = path
+        path = path.path if hasattr(path, 'path') else path
+        errmsg = 'File changed on disk: {}'.format(path)
+        super(FileChangedError, self).__init__(errmsg)
+
+
+class FileExistsError(Error):
+
+    def __init__(self, path):
+        self.file = path
+        path = path.path if hasattr(path, 'path') else path
+        errmsg = 'File or folder already exists: {}'.format(path)
+        super(FileExistsError, self).__init__(errmsg)
+
+
+class FileNotWritableError(Error):
+
+    def __init__(self, path):
+        self.file = path
+        path = path.path if hasattr(path, 'path') else path
+        errmsg = 'No permission to write file: {}'.format(path)
+        super(FileNotWritableError, self).__init__(errmsg)
+
+
 class FolderNotEmptyError(Error):
 
     def __init__(self, path):
@@ -464,8 +491,9 @@ class File(FSObjectBase):
     Cannot be instantiated directly; use one of the subclasses instead. Main
     use outside of this module is to check isinstance(object, File).
     """
+    _mimetype = None
 
-    def __init__(zself, path, endofline=_EOL):
+    def __init__(self, path, endofline=_EOL):
         errmsg = 'This class is not meant to be instantiated'
         raise NotImplementedError(errmsg)
 
@@ -537,7 +565,7 @@ class File(FSObjectBase):
                 self.watcher.emit('created', self)
 
     def read_with_etag(self):
-        return self._read_with_egat(self.read)
+        return self._read_with_etag(self.read)
 
     def readlines_with_etag(self):
         return self._read_with_etag(self.readlines)
