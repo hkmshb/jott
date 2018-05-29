@@ -2,6 +2,8 @@
 '''
 import logging
 from .basedirs import *
+from .confdicts import *
+
 from . import basedirs  # temp
 
 

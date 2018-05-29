@@ -5,7 +5,6 @@ import os, os.path as osp
 from tests.test_env import EnvironContext
 from jott.fs import File, Folder, LocalFile, LocalFolder
 
-
 ## set JOTT.EXEC for config import to work during tests
 import jott
 jott.JOTT_EXEC = osp.abspath(__file__)
@@ -141,3 +140,68 @@ class TestXDGDirs:
                 ('XDG_CONFIG_DIRS', '/foo/config/dir1:/foo/config/dir2'),
             ):
                 getattr(jott.config.basedirs, key) == map(LocalFolder, value.split(':'))
+
+
+class TestControlledDict:
+
+    def test_modified_state(self):
+        ctrldict = ControlledDict({'foo': 'bar'})
+        assert ctrldict.modified == False
+
+        ctrldict['bar'] = 'egg'
+        assert ctrldict.modified == True
+        ctrldict.modified = False
+
+        ctrldict['section'] = ControlledDict()
+        ctrldict['section']['go?'] = 'yes'
+        assert ctrldict['section'].modified == True
+        assert ctrldict.modified == True
+
+        ctrldict.modified = False
+        assert ctrldict.modified == False
+
+        ctrldict['section'].modified = False
+        assert ctrldict['section'].modified == False
+        assert ctrldict.modified == False
+
+        ## nested dict
+        ctrldict['section'] = ControlledDict()
+        ctrldict['section']['go?'] = 'FOO!'
+        assert ctrldict['section'].modified == True
+        assert ctrldict.modified == True
+
+        ctrldict.modified = False
+        assert ctrldict['section'].modified == False
+        assert ctrldict.modified == False
+
+        ctrldict.update({'new': 'book'})
+        assert ctrldict.modified == True
+        ctrldict.modified = False
+
+        ctrldict.setdefault('new', 'XXX')
+        assert ctrldict.modified == False
+        ctrldict.setdefault('new2', 'XXY')
+        assert ctrldict.modified == True
+
+    def test_event_changed_subscription(self):
+        counter = [0]
+        def handler(source, **kwargs):
+            counter[0] += 1
+
+        ctrldict = ControlledDict({'foo': 'bar', 'section': ControlledDict()})
+        ctrldict.changed.connect(handler)
+
+        ctrldict['new'] = 'YYY'
+        assert counter == [1]
+
+        ctrldict.update({'a': 1, 'b': 2, 'c':3})
+        assert counter == [2]
+
+        ctrldict['section']['foo'] = 'zzz'
+        assert counter == [3]
+        ctrldict.modified = False
+
+        value = ctrldict.pop('new')
+        assert value == 'YYY'
+        assert ctrldict.modified == True
+        pytest.raises(KeyError, ctrldict.__getitem__, value)
