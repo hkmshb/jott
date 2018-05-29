@@ -12,9 +12,8 @@ import tempfile
 log = logging.getLogger('jott.fs')
 
 from . import FS_CASE_SENSITIVE, FS_ENCODING
-from . base import *
+from .base import *
 from .base import _EOL, _SEP
-from jott.env import environ
 
 
 def _os_lrmdir(path):
@@ -174,9 +173,9 @@ class LocalFolder(LocalFSObjectBase, Folder):
 
     def child(self, path):
         p = self.get_childpath(path)
-        if os.path.isdir(path):
+        if os.path.isdir(p.path):
             return self.folder(path)
-        elif os.path.isfile(path):
+        elif os.path.isfile(p.path):
             return self.file(path)
         raise FileNotFoundError(p)
 
@@ -361,6 +360,8 @@ def get_tmpdir():
     specific temp folder has permission set to be readable only by the
     current users, and is touched if ti didn't exist yet.
     """
+    from jott.env import environ
+
     root = tempfile.gettempdir()
     username = environ['USER']
     dir = LocalFolder(root).folder('jott-{}'.format(username))
