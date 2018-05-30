@@ -35,6 +35,13 @@ jott.config.data_file = marshall_path_lookup(jott.config.data_file)
 jott.config.data_dir = marshall_path_lookup(jott.config.data_dir)
 
 
+class FilterInvalidConfigWarning(tests.LoggingFilter):
+
+    def __init__(self):
+        super(FilterInvalidConfigWarning, self).__init__(
+            'jott.config', 'Invalid config value')
+
+
 class EnvironConfigContext(EnvironContext):
     # here we use jott.env.environ rather than os.environ
     environ = jott.env.environ
@@ -388,13 +395,15 @@ class TestConfigDict:
         assert self.conf.modified == False
 
     def test_confdict_with_choice_value(self):
-        assert self.conf.setdefault('c', 'xxx', ('xxx', 'yyy', 'zzz')) == 'xxx'
+        with FilterInvalidConfigWarning():
+            assert self.conf.setdefault('c', 'xxx', ('xxx', 'yyy', 'zzz')) == 'xxx'
         assert len(self.conf) == 2
         assert list(self.conf.keys()) == ['a', 'c']
         assert self.conf['c'] == 'xxx'
         assert self.conf.modified == False # True
 
-        self.conf.input(d=10)
+        with FilterInvalidConfigWarning():
+            self.conf.input(d=10)
         assert self.conf['d'] == 'foo'
         self.conf.input(d='bar')
         assert self.conf['d'] == 'bar'
