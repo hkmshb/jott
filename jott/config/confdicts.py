@@ -77,6 +77,8 @@ class ConfigDefinition:
         if default is None:
             allow_empty = True
         self.allow_empty = allow_empty
+        # ensure default value follows check
+        self.default = self.check(default)
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ \
@@ -97,7 +99,7 @@ class ConfigDefinition:
     def _eval_string(self, value):
         if not value:
             return value
-        elif value[0] in ('{' or '['):
+        elif value[0] in ('{', '['):
             try:
                 value = json.loads(value)
             except:
@@ -135,7 +137,7 @@ class TypedConfigDefinition(ConfigDefinition):
             self.cls = str
         else:
             self.cls = cls
-        super(TypedConfigDefinition, self).__init__(self, default, allow_empty)
+        super(TypedConfigDefinition, self).__init__(default, allow_empty)
 
     def __eq__(self, other):
         return super(TypedConfigDefinition, self).__eq__(self, other) \
@@ -175,7 +177,7 @@ class Boolean(ConfigDefinition):
     def check(self, value):
         if self._check_allow_empty(value):
             return None
-        elif instance(value, bool):
+        elif isinstance(value, bool):
             return value
         elif value in ('True', 'true', 'False', 'false'):
             return value in ('True', 'true')
@@ -188,8 +190,8 @@ class Choice(ConfigDefinition):
     __slots__ = ('choices',)
 
     def __init__(self, default, choices, allow_empty=False):
-        super(Choice, self).__init__(default, allow_empty)
         self.choices = choices
+        super(Choice, self).__init__(default, allow_empty)
 
     def __eq__(self, other):
         return super(Choice, self).__eq__(other) and \
@@ -258,12 +260,11 @@ class Range(Integer):
     __slots__ = ('min', 'max')
 
     def __init__(self, default, min, max):
+        self.min, self.max = (min, max)
         super(Range, self).__init__(default)
-        self.min = min
-        self.max = max
 
     def __eq__(self, other):
-        return super(Range, self).__eq__(other) /
+        return super(Range, self).__eq__(other) \
             and (self.min, self.max) == (other.min, other.max)
 
     def check(self, value):
@@ -363,7 +364,7 @@ def build_config_definition(default=None, check=None, allow_empty=False):
         assert len(check) == 2 \
             and isinstance(check[0], int) \
             and isinstance(check[1], int)
-        return Range(dfeault, check[0], check[1])
+        return Range(default, check[0], check[1])
     raise ValueError('Unrecognized check type')
 
 
@@ -382,26 +383,21 @@ class ConfigDict(ControlledDict):
     This class derives from ControlledDict which in turn derives from OrderedDict
     so changes to the config can be tracked by the changed signal, and values
     are kept in the same order so the order in which items are written to the
-    config file in predictable.
+    config file is predictable.
     '''
 
     def __init__(self, iterable=(), **kwargs):
         assert not (iterable and kwargs)
-        super(ConfigdDict, self).__init__(self)
-        self.definitions = OrderedDict()
+        super(ConfigDict, self).__init__(self)
+        self.definitions = collections.OrderedDict()
         self._input = {}
         if iterable or kwargs:
             self.input(iterable or kwargs)
 
     def __delitem__(self, key):
-        if key in self._values:
-            super(ConfigDict, self).__delitem__(key)
-        else:
+        super(ConfigDict, self).__delitem__(key)
+        if key in self._input:
             del self._input[key]
-            try:
-                self._keys.remove(key)
-            except ValueError:
-                pass
 
     def __setitem__(self, key, value):
         if key in self.definitions:
@@ -416,24 +412,22 @@ class ConfigDict(ControlledDict):
             raise KeyError(errmsg.format(key))
 
     def all_items(self):
-        for key in self._keys:
-            if key in self._values:
-                yield key, self._values[key]
-            elif key in self._input:
-                yield key, self._input[key]
+        all_keys = set(self.keys() + self._input.keys())
+        for key in all_keys:
+            if key in self:
+                yield key, self[key]
             else:
-                pass
+                yield key, self._input[key]
 
     def copy(self):
         '''Shallow copy of the items.
 
         :returns: a new object of the same class with the same items
         '''
-        new = self.__class__()
-        new.update(self)
-        new._input.update(self._input)
-        new._keys[:] = list(self._keys)
-        return new
+        localcopy = self.__class__()
+        localcopy.update(self)
+        localcopy._input.update(self._input)
+        return localcopy
 
     def define(self, iterable=(), **kwargs):
         '''Set one or more definitions for this config dict.
@@ -441,7 +435,7 @@ class ConfigDict(ControlledDict):
         Can cause error log when values prior given to input() do not match
         the definition.
         '''
-        assert not (iterable or kwargs)
+        assert not (iterable and kwargs)
         update = iterable or kwargs
         if isinstance(update, collections.Mapping):
             items = update.items()
@@ -452,7 +446,7 @@ class ConfigDict(ControlledDict):
             if key in self.definitions:
                 if definition != self.definitions[key]:
                     raise AssertionError('Key is already defined with different '
-                        'definitions: {}\{} != {}'.format(
+                        'definitions: {}\n{} != {}'.format(
                             key, definition, self.definitions[key]))
                 else:
                     continue
@@ -462,7 +456,7 @@ class ConfigDict(ControlledDict):
                 value = self._input.pop(key)
                 self._set_input(key, value)
             else:
-                with self.changed.blocked():
+                with self._on_changed.blocked():
                     super(ConfigDict, self).__setitem__(key, definition.default)
 
     def dump(self):
@@ -491,10 +485,8 @@ class ConfigDict(ControlledDict):
                 self._set_input(key, value)
             else:
                 self._input[key] = value
-                if key not in self._keys:
-                    self._keys.append(key)
 
-    def update(self, iterabler=(), **kwargs):
+    def update(self, iterable=(), **kwargs):
         '''Like 'dict.update()' copying values for 'iterable' or 'kwargs'.
         However if 'iterable' is also a 'ConfigDict', also the definition
         are copied along.
@@ -512,15 +504,15 @@ class ConfigDict(ControlledDict):
             value = self.definitions[key].check(value)
         except ValueError as error:
             log.warn('Invalid config value for {}: "{}" - {}'.format(
-                key, value, errors.args[0]))
+                key, value, error.args[0]))
             value = self.definitions[key].default
 
-        with self.changed.blocked():
+        with self._on_changed.blocked():
             super(ConfigDict, self).__setitem__(key, value)
 
     def setdefault(self, key, default, check=None, allow_empty=False):
         if key in self.definitions and check is None and allow_empty is False:
-            return ControlledDict.setdefault(self, key, default)
+            return super(ConfigDict, self).setdefault(self, key, default)
         else:
             definition = build_config_definition(default, check, allow_empty)
             self.define({key: definition})
