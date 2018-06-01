@@ -216,7 +216,7 @@ class AtomicWriteContext:
     """
     def __init__(self, file, mode='w'):
         self.path = file.path
-        self.tmppath = self.path + '.jott-new!'
+        self.tmppath = self.path + '.jott-new~'
         self.mode = mode
 
     def __enter__(self):
@@ -262,7 +262,7 @@ class LocalFile(LocalFSObjectBase, File):
     def read(self):
         try:
             with open(self.path, 'rU') as fh:
-                text = fh.read().decode('UTF-8')
+                text = fh.read()
                 # strip unicode byte order mark; internally we use Unix line
                 # ends - so strip out \r
                 return text.lstrip('\ufeff').replace('\x00', '')
@@ -275,7 +275,7 @@ class LocalFile(LocalFSObjectBase, File):
     def readlines(self):
         try:
             with open(self.path, 'rU') as fh:
-                return [l.decode('UTF-8').lstrip('\ufeff').replace('\x00', '')
+                return [l.lstrip('\ufeff').replace('\x00', '')
                             for l in fh]
         except IOError:
             if not self.exists():
@@ -295,6 +295,19 @@ class LocalFile(LocalFSObjectBase, File):
         with self._write_decoration():
             with AtomicWriteContext(self, mode=mode) as fh:
                 fh.writelines(text)
+
+    def writelines(self, lines):
+        #lines = map(lambda l: l.encode('UTF-8'), lines)
+        if self.endofline != _EOL:
+            if self.endofline == 'dos':
+                lines = map(lambda l: l.replace('\n', '\r\n'), lines)
+            mode = 'wb'
+        else:
+            mode = 'w'
+
+        with self._write_decoration():
+            with AtomicWriteContext(self, mode=mode) as fh:
+                fh.writelines(lines)
 
     def write_binary(self, data):
         with self._write_decoration():
