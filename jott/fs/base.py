@@ -3,7 +3,7 @@ import re
 import logging
 import hashlib
 import contextlib
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from . import FS_ENCODING, FS_SUPPORT_NON_LOCAL_FILE_SHARES
 from jott.exc import Error
@@ -176,7 +176,7 @@ else:
         raise ValueError('Not an absolute path: {}'.format('/'.join(names)))
 
     def _join_uri(names):
-        path = urlencode('/'.join(names))
+        path = quote('/'.join(names))
         if names[0][0] == '/':
             return 'file://' + path
         return 'file:///' + path
@@ -219,10 +219,9 @@ class FilePath:
             return _join_abspath(self.pathnames[:-1])
         return None
 
-    # TODO: fix _join_uri
-    # @property
-    # def uri(self):
-    #     return _join_uri(self.pathnames)
+    @property
+    def uri(self):
+        return _join_uri(self.pathnames)
 
     @property
     def userpath(self):
