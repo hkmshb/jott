@@ -13,6 +13,7 @@ import logging
 import collections
 from blinker import Signal
 from jott.signal import SignalHandler
+from jott.fs import FileNotFoundError
 
 log = logging.getLogger('jott.config')
 
@@ -33,6 +34,13 @@ class ControlledDict(collections.OrderedDict):
 
     def __setitem__(self, key, value):
         super(ControlledDict, self).__setitem__(key, value)
+        if isinstance(value, ControlledDict):
+            # had lot of trouble getting this to work, i.e connecting
+            # a handler.. it works now and can't tell why exactly thou
+            # I suspect it all has to do with 'changed' being a class
+            # object as opposed an instance object
+            handler = lambda sender: self._on_changed()
+            self.changed.connect_via(value)(handler)
         self._on_changed()
 
     @property
@@ -390,7 +398,7 @@ class ConfigDict(ControlledDict):
         assert not (iterable and kwargs)
         super(ConfigDict, self).__init__(self)
         self.definitions = collections.OrderedDict()
-        self._input = {}
+        self._input = collections.OrderedDict()
         if iterable or kwargs:
             self.input(iterable or kwargs)
 
@@ -412,7 +420,7 @@ class ConfigDict(ControlledDict):
             raise KeyError(errmsg.format(key))
 
     def all_items(self):
-        all_keys = set(self.keys() + self._input.keys())
+        all_keys = list(self.keys()) + list(self._input.keys())
         for key in all_keys:
             if key in self:
                 yield key, self[key]
@@ -464,7 +472,7 @@ class ConfigDict(ControlledDict):
         input keys. Used e.g. when you only define part of keys in the dict,
         but want to preserve all of them writing back to a file.
         '''
-        return dict(self.all_items())
+        return collections.OrderedDict(self.all_items())
 
     def input(self, iterable=(), **kwargs):
         '''Like 'update' but won't raise on failures.
@@ -517,3 +525,140 @@ class ConfigDict(ControlledDict):
             definition = build_config_definition(default, check, allow_empty)
             self.define({key: definition})
             return self.__getitem__(key)
+
+
+class ConfigSection(ControlledDict):
+    '''Dict with multiple sections of config values.
+    '''
+
+    def __setitem__(self, key, value):
+        assert isinstance(value, (ControlledDict, list))
+        super(ConfigSection, self).__setitem__(key, value)
+
+    def __getitem__(self, key):
+        try:
+            value = super(ConfigSection, self).__getitem__(key)
+            return value
+        except KeyError:
+            with self._on_changed.blocked():
+                super(ConfigSection, self).__setitem__(key, ConfigDict())
+            return super(ConfigSection, self).__getitem__(key)
+
+
+class ConfigFile(ConfigSection):
+    '''Represents an "ini-style" configuration file.
+
+    This models the sections as a dict-of-dicts as found in regular .ini
+    files. This class represents the top-level with a key for each section.
+    The values are in turn ConfigDicts which contain the key value pairs in
+    that section.
+
+    A typical file might look like::
+
+        [Section1]
+        param1=foo
+        param2=bar
+
+        [Section2]
+        enabled=True
+        data={'foo': 1, 'bar': 2}
+
+    By default when parsing sections of the same name they will be merged and
+    values that appear under the same section name later in the file will
+    overwrite values that appeared earlier.
+
+    Sections and parameters whose name start with '_' are considered private
+    and are not stored when the config is written to file. This can be used
+    for caching values that should not be persisted across instances.
+    '''
+
+    def __init__(self, file):
+        '''Constructor
+
+        :param file: a File object for reading and writing config
+        '''
+        super(ConfigFile, self).__init__()
+        self.file = file
+        try:
+            with self._on_changed.blocked():
+                self.read()
+            self.modified = False
+        except (FileNotFoundError):
+            pass
+
+    def dump(self):
+        '''Serializes the config to a "ini-style" config file.
+        :returns: a list of lines with text in "ini-style" formatting
+        '''
+        lines = []
+        def dump_section(name, section):
+            lines.append('[{}]\n'.format(name))
+            for key, value in section.all_items():
+                if not key.startswith('_'):
+                    try:
+                        if key in section.definitions:
+                            _val = section.definitions[key].to_string(value)
+                            lines.append('{}={}\n'.format(key, _val))
+                        else:
+                            lines.append('{}={}\n'.format(key, value))
+                    except:
+                        errmsg = 'Error serializing "{}" in section "[{}]"'
+                        log.exception(errmsg.format(key, name))
+            lines.append('\n')
+
+        for name, section in self.items():
+            if not name.startswith('_'):
+                if isinstance(section, list):
+                    for s in section:
+                        dump_section(name, s)
+                else:
+                    dump_section(name, section)
+        return lines[:-1]   # remove last '\n'
+
+    def read(self):
+        '''Read data from file.
+        '''
+        assert not self.modified, 'dict has unsaved changes'
+        log.debug('Loading config from: {}'.format(self.file))
+        self.parse(self.file.readlines())
+
+    def parse(self, text):
+        '''Parse an "ini-style" configuration. Fills the dictionary with values
+        from this text, will merge with existing sections overwriting existing
+        values.
+
+        :param text: a string or a list of lines.
+        '''
+        if isinstance(text, str):
+            text = text.splitlines(True)
+
+        section, values = (None, [])
+        for line in text:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            elif line.startswith('[') and line.endswith(']'):
+                if values:
+                    section.input(values)
+                    values = []
+
+                name = line[1:-1].strip()
+                section = self[name]
+            elif '=' in line:
+                if section is None:
+                    log.warn('Parameter outside section: {}'.format(line))
+                else:
+                    key, value = line.split('=', 1)
+                    value = value.split('#')[0].strip() # remove inline comments
+                    values.append((str(key.strip()), value))
+            else:
+                log.warn('Could not parse line: {}'.format(line))
+        else:
+            if values:
+                section.input(values)
+
+    def write(self):
+        '''Write data and set modified to False.
+        '''
+        self.file.writelines(self.dump())
+        self.modified = False

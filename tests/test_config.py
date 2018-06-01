@@ -15,7 +15,8 @@ import jott.config
 import jott.env
 
 
-_cwd = LocalFolder(osp.dirname(__file__))
+HERE = osp.dirname(__file__)
+_cwd = LocalFolder(HERE)
 
 def marshall_path_lookup(function):
     def marshalled_path_lookup(*args, **kwargs):
@@ -173,8 +174,10 @@ class TestControlledDict:
 
         ## nested dict
         ctrldict['section'] = ControlledDict()
+        assert ctrldict.modified == True
+        assert ctrldict['section'].modified == False
+        ctrldict.modified = False   # reset
         ctrldict['section']['go?'] = 'FOO!'
-        assert ctrldict['section'].modified == True
         assert ctrldict.modified == True
 
         ctrldict.modified = False
@@ -196,7 +199,7 @@ class TestControlledDict:
             counter[0] += 1
 
         ctrldict = ControlledDict({'foo': 'bar', 'section': ControlledDict()})
-        ctrldict.changed.connect(handler)
+        ctrldict.changed.connect(handler, ctrldict)
 
         ctrldict['new'] = 'YYY'
         assert counter == [1]
@@ -424,3 +427,65 @@ class TestConfigDict:
         conf_copy = conf.copy()
         assert dict(conf_copy) == values
         assert conf_copy == conf
+
+
+class TestConfigFile:
+    test_file_name = 'test-configfile.conf'
+
+    def _get_test_configfile(self, lfile):
+        assert isinstance(lfile, File)
+        conf = ConfigFile(lfile)
+        conf['Foo'].setdefault('xyz', 'foo-foo')
+        conf['Foo'].setdefault('foobar', 0)
+        conf['Foo'].setdefault('test', True)
+        conf['Foo'].setdefault('tiger', (3, 4))
+        conf['Bar'].setdefault('hmmmm', 'phew')
+        conf['Bar'].setdefault('check', 1.3333)
+        conf['Bar'].setdefault('empty', '', str, allow_empty=True)
+        conf['Bar'].setdefault('none', None, str, allow_empty=True)
+        return conf
+
+    def test_data_read_write(self):
+        lfile = LocalFile((HERE, '.tmp', self.test_file_name))
+        if lfile.exists():
+            lfile.remove()
+        assert not lfile.exists()
+        conf = self._get_test_configfile(lfile)
+        conf.write()
+
+        expected = [
+            '[Foo]', 'xyz=foo-foo', 'foobar=0', 'test=True', 'tiger=[3,4]',
+            '',
+            '[Bar]', 'hmmmm=phew', 'check=1.3333', 'empty=', 'none=', ''
+        ]
+        assert lfile.read() == '\n'.join(expected)
+
+    def test_status(self):
+        lfile = LocalFile((HERE, '.tmp', self.test_file_name))
+        if not lfile.exists():
+            conf = self._get_test_configfile(lfile)
+            conf.write()
+            del conf
+
+        conf = ConfigFile(lfile)
+        assert conf.modified == False
+        assert dict(conf['Foo']._input) == {
+            'xyz': 'foo-foo', 'foobar': '0',
+            'test': 'True', 'tiger': '[3,4]'
+        }
+        assert dict(conf['Bar']._input) == {
+            'hmmmm': 'phew', 'check': '1.3333',
+            'empty': '', 'none': ''
+        }
+        conf['Foo'].setdefault('tiger', (3, 4))
+        assert conf.modified == False
+
+        conf['Foo']['tiger'] = (33, 44)
+        assert conf.modified == True
+
+    def test_get_non_existing_section(self):
+        lfile = LocalFile(HERE, '.tmp', self.test_file_name)
+        conf = ConfigFile(lfile) if lfile.exists() else self._get_test_configfile(lfile)
+        section = conf['NewSection']
+        assert section == ConfigDict()
+        assert conf.modified == False
