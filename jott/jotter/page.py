@@ -120,7 +120,7 @@ class Path:
         '''
         index = self.name.rfind(':')
         if index > 0:
-            return self.name[index]
+            return self.name[:index]
         return ''
 
     @property
@@ -202,6 +202,39 @@ class Path:
             return self.name[index:].strip(':')
         raise ValueError("'{}' is not below '{}'".format(self, path))
 
+    def serialize_jott_config(self):
+        '''Returns the name for serializing this Path.
+        '''
+        return self.name
+
+    def __add__(self, name):
+        '''Supports expression 'path + name'; and an alias for path.child(name)
+        '''
+        return self.child(name)
+
+    def __eq__(self, other):
+        '''Paths are equal when their names are the same.
+        '''
+        if isinstance(other, Path):
+            return self.name == other.name
+        return False
+
+    def __ne__(self, other):
+        '''Paths are not equal when their names are not the same.
+        '''
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return self.name.__hash__()
+
+    def __repr__(self):
+        return '<{}: {}>'.format(
+            self.__class__.__name__,
+            self.name
+        )
+
+    def __str__(self):
+        return self.name
 
 class SourceFile(fs.File):
 

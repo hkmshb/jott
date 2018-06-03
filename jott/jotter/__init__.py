@@ -7,3 +7,4 @@ a specific page. See Jotter.pages.lookup_from_user_input to obtain a Path
 from a page name as string. Pages in the jotter are represented by the 
 Page object, which allows to access the page contents.
 """
+from .page import Path, Page
