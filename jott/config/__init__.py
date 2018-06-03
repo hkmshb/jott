@@ -1,8 +1,9 @@
 '''Defines all functions and objects related to the application config.
 '''
 import logging
-from .basedirs import *
 from .confdicts import *
+from .basedirs import *
+from .manager import *
 
 from . import basedirs  # temp
 

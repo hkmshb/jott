@@ -50,7 +50,7 @@ class ConfigManager:
     def get_config_file(self, filename):
         '''Returns a ConfigFile object for filename.
         '''
-        if filename not int self._config_files:
+        if filename not in self._config_files:
             file, defaults = self._get_file(filename)
             config_file = ConfigFile(file)  # defaults omitted
             self._config_files[filename] = config_file
@@ -91,3 +91,50 @@ class ConfigManager:
             file = basedirs.XDG_CONFIG_HOME.file('jott/' + path)
             defaults = XDGConfigFileIter(basepath)
         return file, defaults
+
+
+class DefaultFileIter:
+    '''Generator for iterating default files.
+
+    Will yield first the files in extra followed by files that are based on
+    path and folders. Yields only existing files.
+    '''
+
+    def __init__(self, folders, path, extra=None):
+        self.path = path
+        self.folders = folders
+        self.extra = extra or []
+
+    def __iter__(self):
+        for file in self.extra:
+            if file.exists():
+                yield file
+
+        for folder in self.folders:
+            file = folder.file(self.path)
+            if file.exists():
+                yield file
+
+
+class XDGConfigFileIter(DefaultFileIter):
+    '''Like DefaultFileIter, but uses XDG config folders.
+    '''
+    def __init__(self, path, extra=None):
+        self.path = path
+        self.extra = extra or []
+        self.folders = XDGConfigDirsIter()
+
+
+class XDGConfigDirsIter:
+    '''Generator for iterating XDG config folders.
+
+    Yields the 'jott' sub-folder of each XDG config file.
+    '''
+
+    def __iter__(self):
+        from . import data_dirs
+        yield basedirs.XDG_CONFIG_HOME.child(('jott',))
+        for folder in basedirs.XDG_CONFIG_DIRS:
+            yield folder.child(('jott',))
+        for folder in data_dirs():
+            yield folder
