@@ -8,3 +8,5 @@ from a page name as string. Pages in the jotter are represented by the
 Page object, which allows to access the page contents.
 """
 from .page import Path, Page
+from .info import JotterInfo, JotterInfoList, \
+     resolve_jotter, get_jotter_list, get_jotter_info

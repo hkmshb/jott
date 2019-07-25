@@ -73,3 +73,51 @@ class LoggingFilter(logging.Filter):
                 return not msg.startswith(self.message)
         else:
             return True
+
+
+class TestMixin:
+    '''Class with helper functions for test cases.
+    '''
+    @classmethod
+    def clear_tmp_dir(cls, name=None):
+        '''Clears the tmp dir for this test.
+        '''
+        pth = cls._get_tmp_name(name)
+        assert not os.path.exists(pth), (
+            'This path should not exist: {}'.format(pth)
+        )
+        return pth
+
+    @classmethod
+    def create_tmp_dir(cls, name=None):
+        '''Returns a path to a tmp dir where tests can write data. The dir is
+        removed and recreated empty every time this function is called with
+        the same name from the same class.
+        '''
+        cls.clear_tmp_dir(name)
+        pth = cls._get_tmp_name(name)
+        os.makedirs(pth)
+        assert os.path.exists(pth)
+        return pth
+
+    @classmethod
+    def get_tmp_name(cls, name=None):
+        '''Returns the same path as create_tmp_dir() but without touching it.
+        This method will raise an exception when a file or dir exists of the
+        same.
+        '''
+        pth = self._get_tmp_name(name)
+        assert os.path.exists(pth), (
+            'This path should not exist: {}'.format(pth)
+        )
+        return pth
+
+    @classmethod
+    def _get_tmp_name(cls, name):
+        if name:
+            assert not os.path.sep in name, (
+                "Dont use this method to get sub folders or file")
+            name = cls.__name__ + '_' + name
+        else:
+            name = cls.__name__
+        return os.path.join(TMPDIR, name)
